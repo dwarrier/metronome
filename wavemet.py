@@ -1,28 +1,45 @@
 from wave import open as wavopen
 import pyaudio
+import array
 import math
 import random
 import struct
 
-SAMPLE_LEN = 10000
+BPM = 120 # Tempo in beats per minute
+TIME_SIG = 4 # beats per measure
+SEC_PER_BEAT = 60.0/BPM
+SAMPLE_LEN = SEC_PER_BEAT*TIME_SIG # Length of the signal in seconds
+FRAME_RATE = 44100 # Number of frames per second
+FRAME_NUM = SEC_PER_BEAT*44100# Number of frames between each beat
+BEAT_SIZE = 0.1*FRAME_RATE # Integer value is number of seconds for a beat
+AMP = 10000 # Amplitude of sine wave
+_2PI = 2*math.pi
 noise_output = wavopen('noise.wav', 'wb')
-noise_output.setparams((2, 2, 44100, 0, 'NONE', 'not compressed'))
+noise_output.setparams((2, 2, FRAME_RATE, 0, 'NONE', 'not compressed'))
 
 def sine_wave(x):
-  #return 1000*math.sin(0.1*math.pi*x) 
-  #return 1000*math.sin(0.04*math.pi*x) 
-  return 10000*math.sin(440*2*math.pi*x/44100) 
+  return AMP*math.sin(440*_2PI*x/FRAME_RATE) 
   return 0
 
 
+vals = []
+frame_ct = 0
+beat_num = 0
+while frame_ct < SAMPLE_LEN*FRAME_NUM:
+  if frame_ct >= FRAME_NUM*beat_num:
+    for i in range(int(BEAT_SIZE)): 
+      value = sine_wave(i)
+      packed_value = struct.pack('h', value)
+      vals.append(packed_value)
+      vals.append(packed_value)
+      frame_ct+=1
+    beat_num+=1
+  packed_value = struct.pack('h', 0)
+  vals.append(packed_value)
+  vals.append(packed_value)
+  frame_ct+=1
 
-for i in range(0, SAMPLE_LEN):
-        #value = random.randint(-32767, 32767)
-        value = sine_wave(i)
-        packed_value = struct.pack('h', value)
-        noise_output.writeframes(packed_value)
-        noise_output.writeframes(packed_value)
-
+noise_output.writeframes(''.join(vals))
 noise_output.close()
 
 s = wavopen('noise.wav', 'rb')
@@ -45,6 +62,9 @@ data = wf.readframes(CHUNK)
 while data != '':
   stream.write(data)
   data = wf.readframes(CHUNK)
+  if data == '':
+    wf.rewind()
+    data = wf.readframes(CHUNK)
 
 wf.close()
 stream.stop_stream()
